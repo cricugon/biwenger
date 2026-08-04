@@ -18,6 +18,9 @@ export async function importFantasyDaily({ enforceMadridTime = true } = {}) {
   }
   try {
     const snapshot = await downloadFantasyMarket();
+    if (snapshot.sourceDate !== date) {
+      throw new Error(`FútbolFantasy todavía publica ${snapshot.sourceDate}; se reintentará para ${date}`);
+    }
     const stored = await storeFantasyPlayers(snapshot);
     const result = { skipped: false, date, sourceUpdatedAt: snapshot.sourceUpdatedAt, ...stored };
     await database.collection("job_runs").updateOne({ key }, { $set: { status: "complete", completedAt: new Date(), result } });

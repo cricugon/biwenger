@@ -21,7 +21,12 @@ async function ensureIndexes(database) {
     database.collection("market_values").createIndex({ playerId: 1, date: -1 }),
     database.collection("biwenger_observations").createIndex({ clientId: 1, playerId: 1, date: 1 }, { unique: true }),
     database.collection("biwenger_observations").createIndex({ playerId: 1, date: 1 }),
-    database.collection("job_runs").createIndex({ key: 1 }, { unique: true })
+    database.collection("job_runs").createIndex({ key: 1 }, { unique: true }),
+    database.collection("users").createIndex({ email: 1 }, { unique: true }),
+    database.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true }),
+    database.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    database.collection("sessions").createIndex({ userId: 1, createdAt: -1 }),
+    database.collection("ai_requests").createIndex({ userId: 1, createdAt: -1 })
   ]);
 }
 
