@@ -1,0 +1,21 @@
+{
+  "name": "biwenger-market-values-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Histórico permanente de valores de mercado para Biwenger Saldo",
+  "engines": {
+    "node": ">=22 <26"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "import:daily": "node src/jobs/import-fantasy.js",
+    "import:history": "node src/jobs/import-history.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0",
+    "express": "5.2.1",
+    "mongodb": "7.5.0"
+  }
+}
