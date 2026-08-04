@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import express from "express";
 import { config } from "./config.js";
@@ -120,7 +121,7 @@ export function createApp() {
       }
       const players = await queryValues(requested, days);
       res.json({
-        version: 2,
+        version: 3,
         source: "Biwenger Saldo Values",
         sourceUrl: `${req.protocol}://${req.get("host")}`,
         sourceUpdatedAt: madridParts().date,

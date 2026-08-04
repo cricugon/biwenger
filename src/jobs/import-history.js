@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { config } from "../config.js";
 import { closeDb } from "../db.js";
 import { downloadFantasyDetail, downloadFantasyMarket } from "../futbol-fantasy.js";

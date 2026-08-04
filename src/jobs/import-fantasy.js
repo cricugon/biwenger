@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { closeDb } from "../db.js";
 import { importFantasyDaily } from "../importer.js";
 

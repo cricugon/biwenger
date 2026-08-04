@@ -1,23 +1,45 @@
-# Servidor de valores de mercado
+# Servidor Biwenger Saldo
 
-API Node.js + MongoDB que conserva indefinidamente los valores diarios. La fuente diaria es FútbolFantasy y las observaciones leídas por la app desde una sesión válida de `/market` se guardan como contraste; para una fecha concreta, la API sirve primero el consenso observado en Biwenger y usa FútbolFantasy cuando no existe esa observación.
+API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas recordadas de la app y ejecuta el analista de liga mediante OpenAI sin exponer la clave a la APK.
 
 ## Despliegue en Render
 
 1. Sube el repositorio a GitHub o GitLab.
-2. En MongoDB Atlas crea la base de datos, un usuario con contraseña y permite conexiones desde Render. Copia la cadena `mongodb+srv://…`.
-3. En Render elige **New > Blueprint** y selecciona este repositorio. Render leerá `render.yaml` y creará el servicio web y el cron.
-4. Introduce `MONGODB_URI` para el servicio web y para el cron cuando Render lo solicite. No guardes esta cadena en Git.
-5. Cuando el servicio esté activo, abre `https://TU-SERVICIO.onrender.com/health`.
-6. En `app/src/main/java/com/biwinger/saldo/MainActivity.java`, asigna `https://TU-SERVICIO.onrender.com` a la constante `MARKET_API_BASE_URL` y vuelve a compilar la app.
+2. En MongoDB Atlas crea la base, un usuario con contraseña y permite conexiones desde Render.
+3. En Render elige **New > Blueprint** y selecciona el repositorio. `render.yaml` crea el servicio web y el cron diario.
+4. Configura `MONGODB_URI` tanto en el servicio web como en el cron.
+5. Configura solo en el servicio web:
+   - `OPENAI_API_KEY`: clave secreta de un proyecto de OpenAI con facturación activa.
+   - `OPENAI_SAFETY_SALT`: valor aleatorio secreto de al menos 32 caracteres.
+   - `OPENAI_MODEL=gpt-5.6-sol`.
+   - `OPENAI_REASONING_EFFORT=medium`.
+   - Opcionales: `OPENAI_MAX_OUTPUT_TOKENS=1200`, `OPENAI_CONTEXT_MAX_CHARS=240000` y `SESSION_DAYS=90`.
+6. No configures `OPENAI_API_KEY` en Android ni en el cron.
+7. Abre `https://TU-SERVICIO.onrender.com/health`. `features.ai` debe ser `true`.
 
-El cron se lanza a los minutos 15 entre las 05:00 y 07:59 UTC. El propio importador comprueba `Europe/Madrid`, solo importa después de las 07:00 españolas y utiliza una clave diaria única en MongoDB; así funciona con horario de invierno y verano sin duplicar valores.
+La URL de este despliegue ya está fijada en `MainActivity.java` como `https://biwenger.onrender.com`.
 
-Render no ofrece actualmente plan gratuito para Cron Jobs y aplica un cargo mínimo mensual. Si prefieres evitarlo, ejecuta `npm run import:daily` desde cualquier programador externo con el mismo horario y despliega únicamente el servicio web.
+## Configuración de OpenAI
 
-## Importación histórica inicial
+No hace falta crear un Assistant ni un bot en OpenAI Platform. El servidor usa la Responses API mediante el SDK oficial. Las instrucciones completas y versionadas están en `src/ai.js`, constante `BIWENGER_SYSTEM_PROMPT`; es el único lugar que hay que editar para cambiar el comportamiento.
 
-Desde Render puedes crear temporalmente un Job o ejecutar en una máquina con Node 22+:
+Configuración aplicada:
+
+- Modelo: `gpt-5.6-sol`.
+- Esfuerzo de razonamiento: `medium`.
+- Verbosidad: `medium`.
+- Salida máxima: 1200 tokens.
+- `store: false`.
+- `safety_identifier` estable y seudónimo por usuario.
+- Ámbito exclusivo de Biwenger; una pregunta ajena se rechaza, pero queda registrada como consumo.
+
+La app envía un contexto JSON compacto con mánagers, saldos, plantillas, pujas máximas, mercado libre actual, movimientos recientes, perfiles aprendidos y resultados históricos. No envía cookies ni credenciales de Biwenger.
+
+## Cron e importación histórica
+
+El cron se lanza a los minutos 15 entre las 05:00 y 07:59 UTC. El importador comprueba `Europe/Madrid`, solo trabaja después de las 07:00 españolas y utiliza una clave diaria única en MongoDB, por lo que admite horario de invierno/verano sin duplicar valores.
+
+Para la importación histórica inicial:
 
 ```bash
 cd server
@@ -25,12 +47,27 @@ npm install --omit=dev
 MONGODB_URI='mongodb+srv://…' npm run import:history
 ```
 
-Primero importa todas las fechas expuestas en la tabla principal y después visita, de forma secuencial y reanudable, la ficha de cada futbolista. Si se interrumpe, vuelve a ejecutar el comando: las fichas terminadas se omiten. `-- --force` permite repetirlas. `DETAIL_DELAY_MS` controla la pausa entre fichas y vale 900 ms por defecto.
+La tarea es secuencial y reanudable. `-- --force` permite repetir fichas y `DETAIL_DELAY_MS` controla la pausa, con 900 ms por defecto.
 
 ## API
 
-- `GET /health`: comprueba servidor y MongoDB.
-- `POST /api/v1/values/query`: recibe `{ "players": ["Nombre"], "days": 60 }`.
-- `POST /api/v1/observations/biwenger`: recibe el catálogo diario leído por la app. Solo contiene identificador seudónimo de instalación, nombre, equipo, posición y valor; no recibe cookies, contraseña, saldo ni identidad de la liga.
+- `GET /health`: comprueba Mongo y muestra las funciones activas.
+- `POST /api/v1/auth/register`: `{ "displayName", "email", "password", "deviceName" }`.
+- `POST /api/v1/auth/login`: `{ "email", "password", "deviceName" }`.
+- `GET /api/v1/auth/me`: requiere `Authorization: Bearer TOKEN`.
+- `POST /api/v1/auth/logout`: revoca la sesión actual.
+- `POST /api/v1/ai/ask`: `{ "preset", "question", "context" }`, con sesión.
+- `POST /api/v1/values/query`: `{ "players": ["Nombre"], "days": 60 }`.
+- `POST /api/v1/observations/biwenger`: guarda el contraste diario leído por la app.
 
-Las colecciones `market_values` y `biwenger_observations` tienen índices únicos, por lo que repetir un cron o un envío actualiza el dato existente sin duplicarlo. Los históricos no se eliminan; el límite de días solo se aplica a las respuestas de la API.
+Las contraseñas se derivan con `scrypt` y sal individual. Las sesiones son tokens opacos; Mongo solo conserva su hash y las elimina al caducar. Todas las cuentas tienen por ahora `credits.unlimited=true` y coste cero. Cada consulta queda en `ai_requests` con estado y uso de tokens, dejando preparado el descuento de saldo futuro.
+
+## Desarrollo y pruebas
+
+Copia `.env.example` como `.env` y sustituye los marcadores. Nunca publiques `.env`.
+
+```bash
+npm install
+npm test
+npm start
+```

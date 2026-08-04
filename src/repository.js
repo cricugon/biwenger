@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { db } from "./db.js";
-import { earliestDate, median, normalizeName, safeValue } from "./utils.js";
+import { earliestDate, median, normalizeName, playerMatchScore, safeValue } from "./utils.js";
 
 export async function storeFantasyPlayers(snapshot) {
   const database = await db();
@@ -130,9 +130,30 @@ export async function storeBiwengerObservations(payload) {
 
 export async function queryValues(requestedPlayers, days) {
   const database = await db();
-  const names = [...new Set(requestedPlayers.map(item => normalizeName(typeof item === "string" ? item : item && item.name)).filter(Boolean))].slice(0, 100);
-  if (!names.length) return [];
-  const players = await database.collection("players").find({ normalizedName: { $in: names } }).toArray();
+  const requests = [];
+  const seen = new Set();
+  for (const raw of requestedPlayers.slice(0, 500)) {
+    const input = typeof raw === "string" ? { name: raw } : (raw || {});
+    const key = [normalizeName(input.name), normalizeName(input.team), String(input.id || "")].join("|");
+    if (!normalizeName(input.name) || seen.has(key)) continue;
+    seen.add(key);
+    requests.push(input);
+  }
+  if (!requests.length) return [];
+
+  const catalog = await database.collection("players").find({}).project({
+    name: 1, normalizedName: 1, team: 1, normalizedTeam: 1, position: 1, sourceIds: 1
+  }).toArray();
+  const selected = new Map();
+  for (const request of requests) {
+    const ranked = catalog.map(player => ({ player, score: playerMatchScore(request, player) }))
+      .filter(result => result.score >= 0)
+      .sort((left, right) => right.score - left.score);
+    if (!ranked.length) continue;
+    if (ranked.length > 1 && ranked[0].score === ranked[1].score) continue;
+    selected.set(String(ranked[0].player._id), ranked[0].player);
+  }
+  const players = [...selected.values()];
   const playerIds = players.map(player => player._id);
   const values = await database.collection("market_values").find({
     playerId: { $in: playerIds }, date: { $gte: earliestDate(days) }

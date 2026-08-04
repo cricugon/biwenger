@@ -1,6 +1,6 @@
 {
   "name": "biwenger-market-values-api",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "description": "Histórico permanente de valores de mercado para Biwenger Saldo",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "cheerio": "1.2.0",
+    "dotenv": "16.6.1",
     "express": "5.2.1",
     "mongodb": "7.5.0",
     "openai": "7.4.0"
