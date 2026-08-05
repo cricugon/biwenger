@@ -45,11 +45,22 @@ function validAdminToken(token) {
 }
 
 export function adminConfigured() {
-  return config.adminPassword.length >= 12 && config.adminSessionSecret.length >= 24;
+  return adminConfigurationProblems().length === 0;
+}
+
+export function adminConfigurationProblems() {
+  const problems = [];
+  if (config.adminUsername.length < 1) problems.push("ADMIN_USERNAME");
+  if (config.adminPassword.length < 12) problems.push("ADMIN_PASSWORD (mínimo 12 caracteres)");
+  if (config.adminSessionSecret.length < 24) problems.push("ADMIN_SESSION_SECRET (mínimo 24 caracteres)");
+  return problems;
 }
 
 export function adminLogin(req, res) {
-  if (!adminConfigured()) throw clientError("El panel no está configurado en Render", 503);
+  const configurationProblems = adminConfigurationProblems();
+  if (configurationProblems.length) {
+    throw clientError("El panel no está configurado: revisa " + configurationProblems.join(", "), 503);
+  }
   const username = String(req.body && req.body.username || "").trim();
   const password = String(req.body && req.body.password || "");
   if (!safeEqual(username, config.adminUsername) || !safeEqual(password, config.adminPassword)) {

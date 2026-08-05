@@ -172,6 +172,12 @@
   $("#diagnostic-list").addEventListener("click", event => { const item = event.target.closest("[data-diagnostic]"); if (item) openDiagnostic(item.dataset.diagnostic); });
 
   function debounce(fn, ms) { let timer; return () => { clearTimeout(timer); timer = setTimeout(() => fn().catch(error => toast(error.message)), ms); }; }
+  api("/config").then(config => {
+    if (!config.configured) {
+      $("#configuration-error").textContent = "Panel pendiente de configuración en Render: " + config.requirements.join(", ") + ".";
+      $("#configuration-error").hidden = false;
+    }
+  }).catch(() => {});
   api("/session").then(enter).catch(() => { $("#login").hidden = false; });
   window.addEventListener("unhandledrejection", event => toast(event.reason?.message || "Ha ocurrido un error"));
 })();

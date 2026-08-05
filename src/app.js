@@ -20,6 +20,7 @@ import { queryValues, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
 import {
   adminConfigured,
+  adminConfigurationProblems,
   adminDiagnostic,
   adminDiagnostics,
   adminLogin,
@@ -51,6 +52,11 @@ export function createApp() {
 
   app.post("/admin/api/login", adminLoginRateLimit, (req, res, next) => {
     try { res.json(adminLogin(req, res)); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/config", (_req, res) => {
+    const problems = adminConfigurationProblems();
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ configured: problems.length === 0, requirements: problems.length ? problems : ["ok"] });
   });
   app.post("/admin/api/logout", requireAdmin, (req, res, next) => {
     try { res.json(adminLogout(req, res)); } catch (error) { next(error); }
