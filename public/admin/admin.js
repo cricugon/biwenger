@@ -137,13 +137,27 @@
 
   $("#login-form").addEventListener("submit", async event => {
     event.preventDefault();
+    const loginButton = $("#login-button");
+    loginButton.disabled = true;
+    loginButton.textContent = "Entrando…";
+    $("#login-status").textContent = "Comprobando credenciales…";
     $("#login-error").hidden = true;
     try {
       await api("/login", { method: "POST", body: JSON.stringify({ username: $("#username").value, password: $("#password").value }) });
       $("#password").value = "";
+      $("#login-status").textContent = "Acceso correcto. Cargando datos…";
       await enter();
-    } catch (error) { $("#login-error").textContent = error.message; $("#login-error").hidden = false; }
+    } catch (error) {
+      $("#login-error").textContent = error.message;
+      $("#login-error").hidden = false;
+      $("#login-status").textContent = "El acceso no se ha completado.";
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = "Entrar";
+    }
   });
+  window.adminMainHandlesLogin = true;
+  $("#login-status").textContent = "Panel preparado.";
   $("#logout").addEventListener("click", async () => { await api("/logout", { method: "POST" }); location.reload(); });
   $$(".tabs button").forEach(button => button.addEventListener("click", () => {
     $$(".tabs button").forEach(item => item.classList.toggle("active", item === button));

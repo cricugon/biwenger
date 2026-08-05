@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>Biwenia · Administración</title>
-  <link rel="stylesheet" href="/admin/assets/admin.css?v=1.3.1">
-  <style>.value-chart-card{margin:0 20px 20px;padding:16px;border:1px solid #e5e7eb;border-radius:15px;background:#fafafa}.chart-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.chart-head h3{margin:0 0 3px}.value-chart-card svg{display:block;width:100%;height:auto;margin-top:12px;background:#fff;border-radius:10px}.chart-grid{stroke:#e5e7eb;stroke-width:1}.chart-line{fill:none;stroke:#e52332;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.chart-area{fill:#e5233214}.chart-dot{fill:#fff;stroke:#e52332;stroke-width:3}#values-body tr{cursor:pointer}#values-body tr:hover{background:#fff4f5}</style>
+  <link rel="stylesheet" href="/admin/assets/admin.css?v=1.3.3">
+  <style>[hidden]{display:none!important}.value-chart-card{margin:0 20px 20px;padding:16px;border:1px solid #e5e7eb;border-radius:15px;background:#fafafa}.chart-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.chart-head h3{margin:0 0 3px}.value-chart-card svg{display:block;width:100%;height:auto;margin-top:12px;background:#fff;border-radius:10px}.chart-grid{stroke:#e5e7eb;stroke-width:1}.chart-line{fill:none;stroke:#e52332;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.chart-area{fill:#e5233214}.chart-dot{fill:#fff;stroke:#e52332;stroke-width:3}#values-body tr{cursor:pointer}#values-body tr:hover{background:#fff4f5}</style>
 </head>
 <body>
   <section id="login" class="login-shell">
@@ -16,7 +16,8 @@
       <h1>Administración</h1>
       <label>Usuario<input id="username" autocomplete="username" value="admin" required></label>
       <label>Contraseña<input id="password" type="password" autocomplete="current-password" required></label>
-      <button type="submit">Entrar</button>
+      <button id="login-button" type="submit">Entrar</button>
+      <p id="login-status" class="muted" role="status">Cargando panel…</p>
       <p id="configuration-error" class="error" hidden></p>
       <p id="login-error" class="error" hidden></p>
     </form>
@@ -65,6 +66,54 @@
     </main>
     <div id="toast" class="toast"></div>
   </div>
-  <script src="/admin/assets/admin.js?v=1.3.1"></script>
+  <script>
+    (function () {
+      var form = document.getElementById("login-form");
+      var status = document.getElementById("login-status");
+      var error = document.getElementById("login-error");
+      var button = document.getElementById("login-button");
+      function showError(message) {
+        error.textContent = message || "No se pudo iniciar sesión.";
+        error.hidden = false;
+        status.textContent = "El acceso no se ha completado.";
+      }
+      window.addEventListener("error", function (event) {
+        showError("Error al cargar el panel: " + (event.message || "JavaScript no disponible"));
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        showError(event.reason && event.reason.message ? event.reason.message : "Error de conexión con el panel.");
+      });
+      form.addEventListener("submit", function (event) {
+        if (window.adminMainHandlesLogin) return;
+        event.preventDefault();
+        button.disabled = true;
+        button.textContent = "Entrando…";
+        status.textContent = "Comprobando credenciales…";
+        error.hidden = true;
+        fetch("/admin/api/login", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+          })
+        }).then(function (response) {
+          return response.json().catch(function () { return {}; }).then(function (body) {
+            if (!response.ok) throw new Error(body.error || "Error HTTP " + response.status);
+            window.location.reload();
+          });
+        }).catch(function (requestError) {
+          showError(requestError.message);
+          button.disabled = false;
+          button.textContent = "Entrar";
+        });
+      });
+      window.setTimeout(function () {
+        if (!window.adminMainHandlesLogin) status.textContent = "Modo de acceso compatible activo.";
+      }, 1200);
+    })();
+  </script>
+  <script src="/admin/assets/admin.js?v=1.3.3"></script>
 </body>
 </html>
