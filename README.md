@@ -12,6 +12,9 @@ API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas rec
    - `OPENAI_API_KEY`: clave secreta de un proyecto de OpenAI con facturación activa.
    - `OPENAI_SAFETY_SALT`: valor aleatorio secreto de al menos 32 caracteres.
    - `DATASET_HASH_SALT`: otro valor aleatorio secreto para anonimizar ligas y mánagers.
+   - `ADMIN_USERNAME=admin`.
+   - `ADMIN_PASSWORD`: contraseña administrativa de al menos 12 caracteres.
+   - `ADMIN_SESSION_SECRET`: tercer valor aleatorio secreto de al menos 24 caracteres.
    - `OPENAI_MODEL=gpt-5.6-sol`.
    - `OPENAI_REASONING_EFFORT=medium`.
    - Opcionales: `OPENAI_MAX_OUTPUT_TOKENS=1200`, `OPENAI_CONTEXT_MAX_CHARS=240000` y `SESSION_DAYS=90`.
@@ -59,12 +62,24 @@ La tarea es secuencial y reanudable. `-- --force` permite repetir fichas y `DETA
 - `POST /api/v1/auth/logout`: revoca la sesión actual.
 - `POST /api/v1/ai/ask`: `{ "preset", "question", "context" }`, con sesión.
 - `POST /api/v1/predictions/sync`: sincroniza predicciones y resultados anonimizados, con sesión.
+- `POST /api/v1/diagnostics/sync`: sustituye el último diagnóstico de esa cuenta y liga, con sesión.
 - `POST /api/v1/values/query`: `{ "players": ["Nombre"], "days": 60 }`.
 - `POST /api/v1/observations/biwenger`: guarda el contraste diario leído por la app.
 
-Las contraseñas se derivan con `scrypt` y sal individual. Las sesiones son tokens opacos; Mongo solo conserva su hash y las elimina al caducar. Todas las cuentas tienen por ahora `credits.unlimited=true` y coste cero. Cada consulta queda en `ai_requests` con estado y uso de tokens, dejando preparado el descuento de saldo futuro.
+Las contraseñas se derivan con `scrypt` y sal individual. Las sesiones son tokens opacos; Mongo solo conserva su hash y las elimina al caducar. Las cuentas empiezan con saldo 0, cada consulta IA reserva un crédito y lo devuelve automáticamente si OpenAI falla. Cada consulta queda en `ai_requests` con estado y uso de tokens.
 
 Las predicciones se guardan en `prediction_datasets`. Los identificadores originales de liga, mánager y futbolista se transforman mediante HMAC antes de almacenarse. Cuando un escaneo posterior encuentra el resultado real, el mismo documento se actualiza con ganador, importe y, si la liga Premium los muestra, todas las pujas participantes.
+
+## Panel de administración
+
+Abre `https://TU-SERVICIO.onrender.com/admin`. El panel protegido permite:
+
+- Consultar y eliminar usuarios y sus datos asociados.
+- Editar el saldo de consultas IA.
+- Buscar y filtrar valores históricos, y abrir su gráfico por futbolista.
+- Revisar el último volcado de cada liga con todos los factores, pesos, correcciones aprendidas, probabilidades y cálculos de puja.
+
+Los diagnósticos contienen nombres de mánagers y datos de liga porque están pensados para auditoría interna; solo se sirven tras iniciar sesión en el panel. Android los envía manualmente desde **Ajustes > Enviar diagnóstico**. **Reconstruir aprendizaje** vuelve a calcular localmente los modelos usando las capturas, el tablón, las pujas y los valores ya guardados, sin repetir el scroll completo.
 
 ## Desarrollo y pruebas
 

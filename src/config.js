@@ -11,7 +11,11 @@ export const config = Object.freeze({
   openaiMaxOutputTokens: Math.min(4000, Math.max(300, Number.parseInt(process.env.OPENAI_MAX_OUTPUT_TOKENS || "1200", 10))),
   openaiContextMaxChars: Math.min(600000, Math.max(50000, Number.parseInt(process.env.OPENAI_CONTEXT_MAX_CHARS || "240000", 10))),
   openaiSafetySalt: process.env.OPENAI_SAFETY_SALT || "biwenger-saldo",
-  datasetHashSalt: process.env.DATASET_HASH_SALT || process.env.OPENAI_SAFETY_SALT || "biwenger-dataset"
+  datasetHashSalt: process.env.DATASET_HASH_SALT || process.env.OPENAI_SAFETY_SALT || "biwenger-dataset",
+  adminUsername: process.env.ADMIN_USERNAME || "admin",
+  adminPassword: process.env.ADMIN_PASSWORD || "",
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET || process.env.DATASET_HASH_SALT || process.env.OPENAI_SAFETY_SALT || "",
+  adminSessionHours: Math.min(168, Math.max(1, Number.parseInt(process.env.ADMIN_SESSION_HOURS || "12", 10)))
 });
 
 export function requireMongoUri() {

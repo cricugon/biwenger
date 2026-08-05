@@ -31,7 +31,11 @@ async function ensureIndexes(database) {
       { uploaderUserId: 1, leagueHash: 1, snapshotId: 1 }, { unique: true }
     ),
     database.collection("prediction_datasets").createIndex({ leagueHash: 1, capturedAt: -1 }),
-    database.collection("prediction_datasets").createIndex({ "players.outcome.resolvedAt": -1 })
+    database.collection("prediction_datasets").createIndex({ "players.outcome.resolvedAt": -1 }),
+    database.collection("diagnostic_dumps").createIndex(
+      { uploaderUserId: 1, leagueHash: 1 }, { unique: true }
+    ),
+    database.collection("diagnostic_dumps").createIndex({ updatedAt: -1 })
   ]);
 }
 

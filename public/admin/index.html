@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Biwenia · Administración</title>
+  <link rel="stylesheet" href="/admin/assets/admin.css">
+  <style>.value-chart-card{margin:0 20px 20px;padding:16px;border:1px solid #e5e7eb;border-radius:15px;background:#fafafa}.chart-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.chart-head h3{margin:0 0 3px}.value-chart-card svg{display:block;width:100%;height:auto;margin-top:12px;background:#fff;border-radius:10px}.chart-grid{stroke:#e5e7eb;stroke-width:1}.chart-line{fill:none;stroke:#e52332;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.chart-area{fill:#e5233214}.chart-dot{fill:#fff;stroke:#e52332;stroke-width:3}#values-body tr{cursor:pointer}#values-body tr:hover{background:#fff4f5}</style>
+</head>
+<body>
+  <section id="login" class="login-shell">
+    <form id="login-form" class="login-card">
+      <div class="logo">B</div>
+      <p class="eyebrow">Zona privada</p>
+      <h1>Administración</h1>
+      <label>Usuario<input id="username" autocomplete="username" value="admin" required></label>
+      <label>Contraseña<input id="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Entrar</button>
+      <p id="login-error" class="error" hidden></p>
+    </form>
+  </section>
+
+  <div id="dashboard" hidden>
+    <header>
+      <div class="brand"><span>B</span><div><b>Biwenia</b><small>Administración</small></div></div>
+      <button id="logout" class="ghost">Cerrar sesión</button>
+    </header>
+    <main>
+      <section id="summary" class="summary"></section>
+      <nav class="tabs">
+        <button class="active" data-tab="users">Usuarios</button>
+        <button data-tab="values">Valores de mercado</button>
+        <button data-tab="diagnostics">Diagnósticos</button>
+      </nav>
+
+      <section class="panel active" data-panel="users">
+        <div class="panel-head"><div><p class="eyebrow">Cuentas Android</p><h2>Usuarios registrados</h2></div><input id="user-search" type="search" placeholder="Buscar nombre o correo"></div>
+        <div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Alta / último acceso</th><th>Uso IA</th><th>Créditos</th><th></th></tr></thead><tbody id="users-body"></tbody></table></div>
+      </section>
+
+      <section class="panel" data-panel="values">
+        <div class="panel-head"><div><p class="eyebrow">MongoDB</p><h2>Histórico de mercado</h2></div></div>
+        <form id="value-filters" class="filters">
+          <input id="value-search" type="search" placeholder="Jugador">
+          <input id="value-from" type="date" aria-label="Desde">
+          <input id="value-to" type="date" aria-label="Hasta">
+          <select id="value-source"><option value="">Todas las fuentes</option><option value="futbolfantasy">FútbolFantasy</option><option value="biwenger">Biwenger</option></select>
+          <button>Filtrar</button>
+        </form>
+        <p id="value-count" class="muted"></p>
+        <article id="value-chart-card" class="value-chart-card" hidden><div class="chart-head"><div><h3 id="value-chart-title"></h3><span id="value-chart-range" class="muted"></span></div><button id="value-chart-close" class="ghost">Cerrar gráfico</button></div><svg id="value-chart" viewBox="0 0 900 240" role="img" aria-label="Evolución del valor de mercado"></svg></article>
+        <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Fecha</th><th>Valor</th><th>Fuente</th></tr></thead><tbody id="values-body"></tbody></table></div>
+        <div class="pager"><button id="value-prev" class="ghost">Anterior</button><span id="value-page"></span><button id="value-next" class="ghost">Siguiente</button></div>
+      </section>
+
+      <section class="panel" data-panel="diagnostics">
+        <div class="panel-head"><div><p class="eyebrow">Algoritmo local</p><h2>Volcados de predicción</h2></div><input id="diagnostic-search" type="search" placeholder="Usuario o liga"></div>
+        <div class="diagnostic-layout">
+          <div id="diagnostic-list" class="diagnostic-list"></div>
+          <article id="diagnostic-detail" class="diagnostic-detail"><div class="empty">Envía un volcado desde Ajustes de la app y selecciónalo aquí.</div></article>
+        </div>
+      </section>
+    </main>
+    <div id="toast" class="toast"></div>
+  </div>
+  <script src="/admin/assets/admin.js"></script>
+</body>
+</html>

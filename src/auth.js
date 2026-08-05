@@ -60,7 +60,7 @@ export async function registerUser(input) {
     email: valid.email,
     displayName: valid.displayName,
     passwordHash: await hashPassword(valid.password),
-    credits: { unlimited: true, balance: 0 },
+    credits: { unlimited: false, balance: 0 },
     createdAt: now,
     updatedAt: now,
     lastLoginAt: now
@@ -131,10 +131,32 @@ export function publicUser(user) {
     email: user.email,
     displayName: user.displayName,
     credits: {
-      unlimited: user.credits ? user.credits.unlimited !== false : true,
+      unlimited: false,
       balance: Number(user.credits && user.credits.balance) || 0
     }
   };
+}
+
+export async function reserveAiCredit(userId) {
+  const database = await db();
+  const user = await database.collection("users").findOneAndUpdate(
+    { _id: userId, "credits.balance": { $gte: 1 } },
+    {
+      $inc: { "credits.balance": -1 },
+      $set: { "credits.unlimited": false, updatedAt: new Date() }
+    },
+    { returnDocument: "after" }
+  );
+  if (!user) throw clientError("No tienes saldo de consultas IA", 402);
+  return publicUser(user).credits;
+}
+
+export async function refundAiCredit(userId) {
+  const database = await db();
+  await database.collection("users").updateOne(
+    { _id: userId },
+    { $inc: { "credits.balance": 1 }, $set: { "credits.unlimited": false, updatedAt: new Date() } }
+  );
 }
 
 export function tokenHash(token) {

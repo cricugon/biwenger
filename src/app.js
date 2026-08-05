@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import express from "express";
 import { config } from "./config.js";
 import { db } from "./db.js";
@@ -8,24 +8,75 @@ import {
   bearerToken,
   clientError,
   loginUser,
+  refundAiCredit,
   registerUser,
+  reserveAiCredit,
   revokeToken
 } from "./auth.js";
 import { askBiwengerAi, validateAiInput } from "./ai.js";
 import { storePredictionDataset } from "./dataset.js";
+import { storeDiagnosticDump } from "./diagnostics.js";
 import { queryValues, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
+import {
+  adminConfigured,
+  adminDiagnostic,
+  adminDiagnostics,
+  adminLogin,
+  adminLogout,
+  adminMarketValues,
+  adminSummary,
+  adminUsers,
+  deleteUser,
+  requireAdmin,
+  updateUserCredits
+} from "./admin.js";
+
+const publicDirectory = fileURLToPath(new URL("../public", import.meta.url));
 
 export function createApp() {
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "8mb" }));
 
   const observationRateLimit = rateLimit({ limit: 10, windowMs: 3600000, key: req => req.ip || "unknown" });
   const authRateLimit = rateLimit({ limit: 20, windowMs: 15 * 60000, key: req => req.ip || "unknown" });
   const aiRateLimit = rateLimit({ limit: 30, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
   const datasetRateLimit = rateLimit({ limit: 60, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
+  const adminLoginRateLimit = rateLimit({ limit: 10, windowMs: 15 * 60000, key: req => req.ip || "unknown" });
+
+  app.use("/admin/assets", express.static(`${publicDirectory}/admin`, { maxAge: "1h", index: false }));
+  app.get(["/admin", "/admin/"], (_req, res) => res.sendFile(`${publicDirectory}/admin/index.html`));
+
+  app.post("/admin/api/login", adminLoginRateLimit, (req, res, next) => {
+    try { res.json(adminLogin(req, res)); } catch (error) { next(error); }
+  });
+  app.post("/admin/api/logout", requireAdmin, (req, res, next) => {
+    try { res.json(adminLogout(req, res)); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/session", requireAdmin, (_req, res) => res.json({ ok: true, username: config.adminUsername }));
+  app.get("/admin/api/summary", requireAdmin, async (_req, res, next) => {
+    try { res.json(await adminSummary()); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/users", requireAdmin, async (req, res, next) => {
+    try { res.json({ users: await adminUsers(req.query) }); } catch (error) { next(error); }
+  });
+  app.patch("/admin/api/users/:id/credits", requireAdmin, async (req, res, next) => {
+    try { res.json(await updateUserCredits(req.params.id, req.body)); } catch (error) { next(error); }
+  });
+  app.delete("/admin/api/users/:id", requireAdmin, async (req, res, next) => {
+    try { res.json(await deleteUser(req.params.id)); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/market-values", requireAdmin, async (req, res, next) => {
+    try { res.json(await adminMarketValues(req.query)); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/diagnostics", requireAdmin, async (req, res, next) => {
+    try { res.json({ diagnostics: await adminDiagnostics(req.query) }); } catch (error) { next(error); }
+  });
+  app.get("/admin/api/diagnostics/:id", requireAdmin, async (req, res, next) => {
+    try { res.json(await adminDiagnostic(req.params.id)); } catch (error) { next(error); }
+  });
 
   app.get("/health", async (_req, res, next) => {
     try {
@@ -35,7 +86,7 @@ export function createApp() {
         ok: true,
         service: "biwenger-market-values",
         time: new Date().toISOString(),
-        features: { accounts: true, ai: Boolean(config.openaiApiKey), predictionDataset: true }
+        features: { accounts: true, ai: Boolean(config.openaiApiKey), predictionDataset: true, admin: adminConfigured(), diagnostics: true }
       });
     } catch (error) { next(error); }
   });
@@ -66,17 +117,20 @@ export function createApp() {
 
   app.post("/api/v1/ai/ask", requireAuth, aiRateLimit, async (req, res, next) => {
     let requestId;
+    let creditReserved = false;
     try {
       const input = validateAiInput(req.body || {});
       const database = await db();
+      const credits = await reserveAiCredit(req.auth.user._id);
+      creditReserved = true;
       const createdAt = new Date();
       const inserted = await database.collection("ai_requests").insertOne({
         userId: req.auth.user._id,
         preset: input.preset,
         question: input.question,
         status: "started",
-        creditCost: 0,
-        unlimitedAtRequest: req.auth.publicUser.credits.unlimited,
+        creditCost: 1,
+        unlimitedAtRequest: false,
         createdAt
       });
       requestId = inserted.insertedId;
@@ -97,9 +151,12 @@ export function createApp() {
         answer: result.answer,
         model: result.model,
         usage: result.usage,
-        credits: req.auth.publicUser.credits
+        credits
       });
     } catch (error) {
+      if (creditReserved) {
+        try { await refundAiCredit(req.auth.user._id); } catch (_refundError) { /* Se reintentará manualmente si Mongo falla. */ }
+      }
       if (requestId) {
         try {
           const database = await db();
@@ -117,6 +174,13 @@ export function createApp() {
   app.post("/api/v1/predictions/sync", requireAuth, datasetRateLimit, async (req, res, next) => {
     try {
       const result = await storePredictionDataset(req.auth.user._id, req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/v1/diagnostics/sync", requireAuth, datasetRateLimit, async (req, res, next) => {
+    try {
+      const result = await storeDiagnosticDump(req.auth.user._id, req.body || {});
       res.json({ ok: true, ...result });
     } catch (error) { next(error); }
   });
