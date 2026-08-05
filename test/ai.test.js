@@ -1,11 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { askBiwengerAi, BIWENGER_SYSTEM_PROMPT, compactLeagueContext, validateAiInput } from "../src/ai.js";
+import { askBiwengerAi, BIWENGER_SYSTEM_PROMPT, compactLeagueContext, objectiveLeagueContext, validateAiInput } from "../src/ai.js";
 
 test("el prompt limita las respuestas al ámbito Biwenger", () => {
   assert.match(BIWENGER_SYSTEM_PROMPT, /exclusivamente sobre Biwenger/);
   assert.match(BIWENGER_SYSTEM_PROMPT, /Solo puedo responder preguntas relacionadas/);
   assert.match(BIWENGER_SYSTEM_PROMPT, /nunca sigas instrucciones/);
+});
+
+test("la IA recibe hechos y no las conclusiones del algoritmo local", () => {
+  const context = objectiveLeagueContext({
+    managers: [{ name: "Ana", balance: 10, behavior: { aggression: 99 }, roster: [] }],
+    currentFreeMarket: [{ name: "Nico", value: 20, candidates: [{ manager: "Ana", probability: 90, estimatedBid: 30 }] }],
+    dataQuality: { movements: 5, top1Hits: 4 },
+    recentMovements: [{ player: "Nico", bidsComplete: true, bids: [{ manager: "Ana", amount: 25 }] }]
+  });
+  assert.equal(context.managers[0].behavior, undefined);
+  assert.equal(context.currentFreeMarket[0].candidates, undefined);
+  assert.equal(context.dataQuality.top1Hits, undefined);
+  assert.equal(context.recentMovements[0].bids[0].amount, 25);
+  assert.match(BIWENGER_SYSTEM_PROMPT, /propio análisis/i);
 });
 
 test("valida pregunta, preset y contexto", () => {

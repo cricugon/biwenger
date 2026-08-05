@@ -16,7 +16,7 @@ import {
 import { askBiwengerAi, validateAiInput } from "./ai.js";
 import { storePredictionDataset } from "./dataset.js";
 import { storeDiagnosticDump } from "./diagnostics.js";
-import { queryValues, storeBiwengerObservations } from "./repository.js";
+import { queryValues, reconcilePlayerCatalog, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
 import {
   adminConfigured,
@@ -76,6 +76,9 @@ export function createApp() {
   });
   app.get("/admin/api/market-values", requireAdmin, async (req, res, next) => {
     try { res.json(await adminMarketValues(req.query)); } catch (error) { next(error); }
+  });
+  app.post("/admin/api/players/reconcile", requireAdmin, async (_req, res, next) => {
+    try { res.json({ ok: true, ...(await reconcilePlayerCatalog()) }); } catch (error) { next(error); }
   });
   app.get("/admin/api/diagnostics", requireAdmin, async (req, res, next) => {
     try { res.json({ diagnostics: await adminDiagnostics(req.query) }); } catch (error) { next(error); }

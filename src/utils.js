@@ -17,6 +17,16 @@ function sameTokenSet(left, right) {
   return leftInsideRight || rightInsideLeft;
 }
 
+export function normalizePosition(value) {
+  const position = normalizeName(value);
+  if (!position) return "";
+  if (position === "pt" || position.includes("porter")) return "PT";
+  if (position === "df" || position.includes("defens")) return "DF";
+  if (position === "mc" || position.includes("centrocamp") || position.includes("medio")) return "MC";
+  if (position === "dl" || position.includes("delanter")) return "DL";
+  return position.toUpperCase();
+}
+
 export function playerMatchScore(requested, candidate) {
   const requestedName = normalizeName(requested && requested.name);
   const candidateName = normalizeName(candidate && candidate.name);
@@ -32,13 +42,33 @@ export function playerMatchScore(requested, candidate) {
   const teamMatches = requestedTeam && candidateTeam && sameTokenSet(requestedTeam, candidateTeam);
   if (requestedTeam && candidateTeam && !teamMatches) return -1;
 
-  if (requestedName === candidateName) return 1_500 + (teamMatches ? 100 : 0) + (sourceIds.futbolFantasy ? 200 : 0);
-  if (!sameTokenSet(requestedName, candidateName)) return -1;
+  const requestedPosition = normalizePosition(requested && (requested.position || requested.positionCode));
+  const candidatePosition = normalizePosition(candidate && (candidate.position || candidate.positionCode));
+  const positionMatches = requestedPosition && candidatePosition && requestedPosition === candidatePosition;
+  if (requestedPosition && candidatePosition && !positionMatches) return -1;
+
+  if (requestedName === candidateName) {
+    return 1_500 + (teamMatches ? 100 : 0) + (positionMatches ? 40 : 0) + (sourceIds.futbolFantasy ? 200 : 0);
+  }
+  const tokenSetMatches = sameTokenSet(requestedName, candidateName);
+  if (!tokenSetMatches) {
+    if (!teamMatches || !positionMatches) return -1;
+    const requestedTokens = requestedName.split(" ").filter(token => token.length >= 3);
+    const candidateTokens = candidateName.split(" ").filter(token => token.length >= 3);
+    const overlap = requestedTokens.filter(token => candidateTokens.includes(token)).length;
+    const prefixOverlap = requestedTokens.some(left => candidateTokens.some(right =>
+      Math.min(left.length, right.length) >= 4 && (left.startsWith(right) || right.startsWith(left))
+    ));
+    const singleTokenNickname = requestedTokens.length === 1 && candidateTokens.length === 1 && prefixOverlap;
+    if (!overlap && !singleTokenNickname) return -1;
+    return 1_180 + overlap * 45 + (prefixOverlap ? 25 : 0) + (sourceIds.futbolFantasy ? 120 : 0);
+  }
 
   const requestedTokens = requestedName.split(" ");
   if (requestedTokens.length < 2 && !teamMatches) return -1;
   const extraTokens = Math.abs(candidateName.split(" ").length - requestedTokens.length);
-  return 1_400 - extraTokens * 10 + (teamMatches ? 100 : 0) + (sourceIds.futbolFantasy ? 200 : 0);
+  return 1_400 - extraTokens * 10 + (teamMatches ? 100 : 0) + (positionMatches ? 40 : 0) +
+    (sourceIds.futbolFantasy ? 200 : 0);
 }
 
 export function safeValue(value) {

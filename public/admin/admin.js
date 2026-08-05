@@ -178,6 +178,21 @@
     }
   });
   $("#value-filters").addEventListener("submit", event => { event.preventDefault(); selectedValuePlayerId = ""; $("#value-chart-card").hidden = true; valuePage = 1; loadValues(); });
+  $("#reconcile-players").addEventListener("click", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Unificando…";
+    try {
+      const result = await api("/players/reconcile", { method: "POST", body: "{}" });
+      toast(result.merged ? `${result.merged} jugadores unificados` : "No quedan duplicados compatibles");
+      selectedValuePlayerId = "";
+      valuePage = 1;
+      await Promise.all([loadSummary(), loadValues()]);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Unificar jugadores";
+    }
+  });
   $("#values-body").addEventListener("click", event => { const row = event.target.closest("[data-value-player]"); if (row) { selectedValuePlayerId = row.dataset.valuePlayer; valuePage = 1; loadValues(); } });
   $("#value-chart-close").addEventListener("click", () => { selectedValuePlayerId = ""; $("#value-chart-card").hidden = true; valuePage = 1; loadValues(); });
   $("#value-prev").addEventListener("click", () => { if (valuePage > 1) { valuePage--; loadValues(); } });

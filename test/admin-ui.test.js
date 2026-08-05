@@ -8,7 +8,8 @@ test("el acceso administrativo muestra progreso, errores y tiene respaldo", asyn
   assert.match(html, /id="login-status"/);
   assert.match(html, /Modo de acceso compatible activo/);
   assert.match(html, /\[hidden\]\{display:none!important\}/);
-  assert.match(html, /admin\.js\?v=1\.3\.3/);
+  assert.match(html, /admin\.js\?v=1\.4\.0/);
+  assert.match(html, /id="reconcile-players"/);
   assert.match(script, /Comprobando credenciales/);
   assert.match(script, /window\.adminMainHandlesLogin = true/);
 });

@@ -37,7 +37,7 @@ Configuración aplicada:
 - `safety_identifier` estable y seudónimo por usuario.
 - Ámbito exclusivo de Biwenger; una pregunta ajena se rechaza, pero queda registrada como consumo.
 
-La app envía un contexto JSON compacto con mánagers, saldos, plantillas, pujas máximas, mercado libre actual, movimientos recientes, perfiles aprendidos y resultados históricos. No envía cookies ni credenciales de Biwenger.
+La app envía un contexto JSON compacto con mánagers, saldos, plantillas, pujas máximas, mercado libre actual, movimientos recientes y subastas históricas, incluidas las pujas Premium disponibles. Las probabilidades, pujas estimadas, perfiles de agresividad y demás conclusiones del algoritmo local se excluyen para que el modelo realice un análisis independiente desde los hechos. No envía cookies ni credenciales de Biwenger.
 
 ## Cron e importación histórica
 
@@ -77,6 +77,7 @@ Abre `https://TU-SERVICIO.onrender.com/admin`. El panel protegido permite:
 - Consultar y eliminar usuarios y sus datos asociados.
 - Editar el saldo de consultas IA.
 - Buscar y filtrar valores históricos, y abrir su gráfico por futbolista.
+- Unificar identidades duplicadas usando el nombre de Biwenger como canónico y conservando como alias y valores históricos los datos de FútbolFantasy.
 - Revisar el último volcado de cada liga con todos los factores, pesos, correcciones aprendidas, probabilidades y cálculos de puja.
 
 Los diagnósticos contienen nombres de mánagers y datos de liga porque están pensados para auditoría interna; solo se sirven tras iniciar sesión en el panel. Android los envía manualmente desde **Ajustes > Enviar diagnóstico**. **Reconstruir aprendizaje** vuelve a calcular localmente los modelos usando las capturas, el tablón, las pujas y los valores ya guardados, sin repetir el scroll completo.

@@ -5,27 +5,41 @@ import { earliestDate, median, normalizeName, playerMatchScore, safeValue } from
 export async function storeFantasyPlayers(snapshot) {
   const database = await db();
   const now = new Date();
-  if (snapshot.players.length) {
-    await database.collection("players").bulkWrite(snapshot.players.map(player => ({
-      updateOne: {
-        filter: { "sourceIds.futbolFantasy": String(player.id) },
-        update: {
-          $set: {
-            name: player.name,
-            normalizedName: normalizeName(player.name),
-            position: player.position || "",
-            team: player.team || "",
-            normalizedTeam: normalizeName(player.team),
-            "sourceIds.futbolFantasy": String(player.id),
-            updatedAt: now
-          },
-          $setOnInsert: { createdAt: now }
-        },
-        upsert: true
-      }
-    })), { ordered: false });
-  }
   const ids = snapshot.players.map(player => String(player.id));
+  const existing = ids.length ? await database.collection("players").find({
+    "sourceIds.futbolFantasy": { $in: ids }
+  }).toArray() : [];
+  const existingBySourceId = new Map(existing.map(player => [String(player.sourceIds.futbolFantasy), player]));
+  if (snapshot.players.length) {
+    await database.collection("players").bulkWrite(snapshot.players.map(player => {
+      const previous = existingBySourceId.get(String(player.id));
+      const biwengerCanonical = Boolean(previous && (previous.canonicalSource === "biwenger" ||
+        (Array.isArray(previous.sourceIds && previous.sourceIds.biwenger) && previous.sourceIds.biwenger.length)));
+      const canonicalName = biwengerCanonical ? previous.name : player.name;
+      const canonicalTeam = biwengerCanonical ? previous.team : (player.team || "");
+      const canonicalPosition = biwengerCanonical ? previous.position : (player.position || "");
+      return {
+        updateOne: {
+          filter: { "sourceIds.futbolFantasy": String(player.id) },
+          update: {
+            $set: {
+              name: canonicalName,
+              normalizedName: normalizeName(canonicalName),
+              position: canonicalPosition,
+              team: canonicalTeam,
+              normalizedTeam: normalizeName(canonicalTeam),
+              fantasyIdentity: { name: player.name, team: player.team || "", position: player.position || "" },
+              "sourceIds.futbolFantasy": String(player.id),
+              updatedAt: now
+            },
+            $addToSet: { aliases: player.name },
+            $setOnInsert: { createdAt: now }
+          },
+          upsert: true
+        }
+      };
+    }), { ordered: false });
+  }
   const stored = await database.collection("players").find({ "sourceIds.futbolFantasy": { $in: ids } }).toArray();
   const bySourceId = new Map(stored.map(player => [player.sourceIds.futbolFantasy, player]));
   const operations = [];
@@ -37,7 +51,8 @@ export async function storeFantasyPlayers(snapshot) {
     }
   }
   if (operations.length) await database.collection("market_values").bulkWrite(operations, { ordered: false });
-  return { players: stored.length, values: operations.length };
+  const reconciliation = await reconcilePlayerCatalog(database);
+  return { players: stored.length, values: operations.length, merged: reconciliation.merged };
 }
 
 function valueOperation(playerId, date, source, value, observedAt = new Date(), extra = {}) {
@@ -70,15 +85,165 @@ export async function fantasyPlayersPendingDetail(force = false) {
   return database.collection("players").find(filter).sort({ normalizedName: 1 }).toArray();
 }
 
+function biwengerIds(player) {
+  const value = player && player.sourceIds && player.sourceIds.biwenger;
+  return (Array.isArray(value) ? value : (value ? [value] : [])).map(String);
+}
+
+function uniqueMatch(request, candidates, minimumScore = 1_200) {
+  const ranked = candidates.map(player => ({ player, score: playerMatchScore(request, player) }))
+    .filter(result => result.score >= minimumScore)
+    .sort((left, right) => right.score - left.score);
+  if (!ranked.length) return null;
+  if (ranked.length > 1 && ranked[0].score - ranked[1].score < 35) return null;
+  return ranked[0];
+}
+
+async function mergePlayerRecords(database, canonical, duplicate) {
+  if (!canonical || !duplicate || String(canonical._id) === String(duplicate._id)) return canonical;
+  const canonicalFantasyId = canonical.sourceIds && canonical.sourceIds.futbolFantasy;
+  const duplicateFantasyId = duplicate.sourceIds && duplicate.sourceIds.futbolFantasy;
+  if (canonicalFantasyId && duplicateFantasyId && String(canonicalFantasyId) !== String(duplicateFantasyId)) return canonical;
+
+  const duplicateValues = await database.collection("market_values").find({ playerId: duplicate._id }).toArray();
+  if (duplicateValues.length) {
+    await database.collection("market_values").bulkWrite(duplicateValues.map(entry => valueOperation(
+      canonical._id, entry.date, entry.source, entry.value, entry.observedAt || entry.updatedAt || new Date(),
+      { ...(entry.samples ? { samples: entry.samples } : {}) }
+    )), { ordered: false });
+  }
+
+  const duplicateObservations = await database.collection("biwenger_observations").find({ playerId: duplicate._id }).toArray();
+  await database.collection("player_merge_audit").insertOne({
+    canonicalPlayerId: canonical._id,
+    duplicatePlayerId: duplicate._id,
+    canonicalBefore: canonical,
+    duplicateBefore: duplicate,
+    duplicateValues,
+    duplicateObservations,
+    mergedAt: new Date(),
+    reversible: true
+  });
+  if (duplicateObservations.length) {
+    await database.collection("biwenger_observations").bulkWrite(duplicateObservations.map(entry => ({
+      updateOne: {
+        filter: { clientId: entry.clientId, playerId: canonical._id, date: entry.date },
+        update: {
+          $set: {
+            value: entry.value,
+            observedAt: entry.observedAt,
+            receivedAt: entry.receivedAt || new Date()
+          },
+          $setOnInsert: { createdAt: entry.createdAt || new Date() }
+        },
+        upsert: true
+      }
+    })), { ordered: false });
+  }
+
+  await Promise.all([
+    database.collection("market_values").deleteMany({ playerId: duplicate._id }),
+    database.collection("biwenger_observations").deleteMany({ playerId: duplicate._id })
+  ]);
+  await database.collection("players").deleteOne({ _id: duplicate._id });
+
+  const sourceIds = {
+    ...(canonical.sourceIds || {}),
+    futbolFantasy: canonicalFantasyId || duplicateFantasyId || undefined,
+    biwenger: Array.from(new Set([...biwengerIds(canonical), ...biwengerIds(duplicate)]))
+  };
+  if (!sourceIds.futbolFantasy) delete sourceIds.futbolFantasy;
+  const aliases = Array.from(new Set([
+    canonical.name, duplicate.name,
+    ...(Array.isArray(canonical.aliases) ? canonical.aliases : []),
+    ...(Array.isArray(duplicate.aliases) ? duplicate.aliases : [])
+  ].filter(Boolean)));
+  const mergedFields = {
+    sourceIds,
+    aliases,
+    imports: { ...(duplicate.imports || {}), ...(canonical.imports || {}) },
+    updatedAt: new Date()
+  };
+  if (sourceIds.biwenger.length) mergedFields.canonicalSource = "biwenger";
+  if (!canonical.fantasyIdentity && duplicate.fantasyIdentity) mergedFields.fantasyIdentity = duplicate.fantasyIdentity;
+  await database.collection("players").updateOne({ _id: canonical._id }, { $set: mergedFields });
+  return { ...canonical, ...mergedFields };
+}
+
+export async function reconcilePlayerCatalog(existingDatabase, options = {}) {
+  const database = existingDatabase || await db();
+  let players = await database.collection("players").find({}).toArray();
+  const canonicals = players.filter(player => biwengerIds(player).length);
+  const fantasyOnly = players.filter(player => player.sourceIds && player.sourceIds.futbolFantasy && !biwengerIds(player).length);
+  let merged = 0;
+  const details = [];
+  for (const fantasy of fantasyOnly) {
+    const match = uniqueMatch({
+      name: fantasy.name,
+      team: fantasy.team,
+      position: fantasy.position
+    }, canonicals.filter(canonical => !canonical.sourceIds?.futbolFantasy), 1_200);
+    if (!match) continue;
+    const canonical = match.player;
+    details.push({ canonical: canonical.name, alias: fantasy.name, score: match.score });
+    if (options.dryRun) continue;
+    await mergePlayerRecords(database, canonical, fantasy);
+    canonical.sourceIds = {
+      ...(canonical.sourceIds || {}),
+      futbolFantasy: fantasy.sourceIds.futbolFantasy,
+      biwenger: biwengerIds(canonical)
+    };
+    canonical.fantasyIdentity = fantasy.fantasyIdentity || {
+      name: fantasy.name, team: fantasy.team, position: fantasy.position
+    };
+    merged += 1;
+  }
+  return { merged, candidates: details.length, details };
+}
+
 async function resolveObservedPlayer(database, input) {
   const normalizedName = normalizeName(input.name);
   const normalizedTeam = normalizeName(input.team);
-  const candidates = await database.collection("players").find({ normalizedName }).limit(5).toArray();
-  let player = candidates.find(item => normalizedTeam && item.normalizedTeam === normalizedTeam) || candidates[0];
+  const filters = [{ normalizedName }];
+  if (normalizedTeam) filters.push({ normalizedTeam });
+  if (input.id) filters.push({ "sourceIds.biwenger": String(input.id) });
+  const candidates = await database.collection("players").find({ $or: filters }).limit(80).toArray();
+  const requested = { name: input.name, team: input.team, position: input.position, positionCode: input.positionCode, id: input.id };
+  const exactId = input.id ? candidates.find(item => biwengerIds(item).includes(String(input.id))) : null;
+  const exactBiwengerName = candidates.find(item => item.normalizedName === normalizedName && biwengerIds(item).length &&
+    (!normalizedTeam || !item.normalizedTeam || item.normalizedTeam === normalizedTeam));
+  const best = uniqueMatch(requested, candidates);
+  let player = exactId || exactBiwengerName || (best && best.player);
   if (player) {
-    if (input.id) await database.collection("players").updateOne({ _id: player._id }, {
-      $addToSet: { "sourceIds.biwenger": String(input.id) }, $set: { updatedAt: new Date() }
+    const previousName = player.name;
+    const update = {
+      name: String(input.name).trim(),
+      normalizedName,
+      team: String(input.team || player.team || "").trim(),
+      normalizedTeam: normalizedTeam || player.normalizedTeam || "",
+      position: String(input.position || input.positionCode || player.position || "").trim(),
+      canonicalSource: "biwenger",
+      updatedAt: new Date()
+    };
+    await database.collection("players").updateOne({ _id: player._id }, {
+      $addToSet: {
+        ...(input.id ? { "sourceIds.biwenger": String(input.id) } : {}),
+        aliases: previousName
+      },
+      $set: update
     });
+    player = { ...player, ...update, sourceIds: {
+      ...(player.sourceIds || {}),
+      biwenger: Array.from(new Set([...biwengerIds(player), ...(input.id ? [String(input.id)] : [])]))
+    } };
+
+    const mergeCandidates = candidates.filter(candidate => String(candidate._id) !== String(player._id) &&
+      candidate.sourceIds && candidate.sourceIds.futbolFantasy);
+    const duplicate = uniqueMatch(requested, mergeCandidates);
+    if (duplicate && (!player.sourceIds.futbolFantasy ||
+      String(player.sourceIds.futbolFantasy) === String(duplicate.player.sourceIds.futbolFantasy))) {
+      player = await mergePlayerRecords(database, player, duplicate.player);
+    }
     return player;
   }
   const document = {
@@ -86,6 +251,7 @@ async function resolveObservedPlayer(database, input) {
     team: String(input.team || "").trim(), normalizedTeam,
     position: String(input.position || "").trim(),
     sourceIds: { biwenger: input.id ? [String(input.id)] : [] },
+    aliases: [], canonicalSource: "biwenger",
     createdAt: new Date(), updatedAt: new Date()
   };
   const inserted = await database.collection("players").insertOne(document);
@@ -140,6 +306,8 @@ export async function queryValues(requestedPlayers, days) {
     requests.push(input);
   }
   if (!requests.length) return [];
+
+  await reconcilePlayerCatalog(database);
 
   const catalog = await database.collection("players").find({}).project({
     name: 1, normalizedName: 1, team: 1, normalizedTeam: 1, position: 1, sourceIds: 1
