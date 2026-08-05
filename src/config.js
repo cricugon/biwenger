@@ -10,7 +10,8 @@ export const config = Object.freeze({
   openaiReasoningEffort: process.env.OPENAI_REASONING_EFFORT || "medium",
   openaiMaxOutputTokens: Math.min(4000, Math.max(300, Number.parseInt(process.env.OPENAI_MAX_OUTPUT_TOKENS || "1200", 10))),
   openaiContextMaxChars: Math.min(600000, Math.max(50000, Number.parseInt(process.env.OPENAI_CONTEXT_MAX_CHARS || "240000", 10))),
-  openaiSafetySalt: process.env.OPENAI_SAFETY_SALT || "biwenger-saldo"
+  openaiSafetySalt: process.env.OPENAI_SAFETY_SALT || "biwenger-saldo",
+  datasetHashSalt: process.env.DATASET_HASH_SALT || process.env.OPENAI_SAFETY_SALT || "biwenger-dataset"
 });
 
 export function requireMongoUri() {

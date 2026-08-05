@@ -12,6 +12,7 @@ import {
   revokeToken
 } from "./auth.js";
 import { askBiwengerAi, validateAiInput } from "./ai.js";
+import { storePredictionDataset } from "./dataset.js";
 import { queryValues, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
 
@@ -24,6 +25,7 @@ export function createApp() {
   const observationRateLimit = rateLimit({ limit: 10, windowMs: 3600000, key: req => req.ip || "unknown" });
   const authRateLimit = rateLimit({ limit: 20, windowMs: 15 * 60000, key: req => req.ip || "unknown" });
   const aiRateLimit = rateLimit({ limit: 30, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
+  const datasetRateLimit = rateLimit({ limit: 60, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
 
   app.get("/health", async (_req, res, next) => {
     try {
@@ -33,7 +35,7 @@ export function createApp() {
         ok: true,
         service: "biwenger-market-values",
         time: new Date().toISOString(),
-        features: { accounts: true, ai: Boolean(config.openaiApiKey) }
+        features: { accounts: true, ai: Boolean(config.openaiApiKey), predictionDataset: true }
       });
     } catch (error) { next(error); }
   });
@@ -110,6 +112,13 @@ export function createApp() {
       }
       next(error);
     }
+  });
+
+  app.post("/api/v1/predictions/sync", requireAuth, datasetRateLimit, async (req, res, next) => {
+    try {
+      const result = await storePredictionDataset(req.auth.user._id, req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (error) { next(error); }
   });
 
   app.post("/api/v1/values/query", async (req, res, next) => {

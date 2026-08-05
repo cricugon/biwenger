@@ -1,4 +1,4 @@
-# Servidor Biwenger Saldo
+# Servidor Biwenia
 
 API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas recordadas de la app y ejecuta el analista de liga mediante OpenAI sin exponer la clave a la APK.
 
@@ -11,6 +11,7 @@ API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas rec
 5. Configura solo en el servicio web:
    - `OPENAI_API_KEY`: clave secreta de un proyecto de OpenAI con facturación activa.
    - `OPENAI_SAFETY_SALT`: valor aleatorio secreto de al menos 32 caracteres.
+   - `DATASET_HASH_SALT`: otro valor aleatorio secreto para anonimizar ligas y mánagers.
    - `OPENAI_MODEL=gpt-5.6-sol`.
    - `OPENAI_REASONING_EFFORT=medium`.
    - Opcionales: `OPENAI_MAX_OUTPUT_TOKENS=1200`, `OPENAI_CONTEXT_MAX_CHARS=240000` y `SESSION_DAYS=90`.
@@ -57,10 +58,13 @@ La tarea es secuencial y reanudable. `-- --force` permite repetir fichas y `DETA
 - `GET /api/v1/auth/me`: requiere `Authorization: Bearer TOKEN`.
 - `POST /api/v1/auth/logout`: revoca la sesión actual.
 - `POST /api/v1/ai/ask`: `{ "preset", "question", "context" }`, con sesión.
+- `POST /api/v1/predictions/sync`: sincroniza predicciones y resultados anonimizados, con sesión.
 - `POST /api/v1/values/query`: `{ "players": ["Nombre"], "days": 60 }`.
 - `POST /api/v1/observations/biwenger`: guarda el contraste diario leído por la app.
 
 Las contraseñas se derivan con `scrypt` y sal individual. Las sesiones son tokens opacos; Mongo solo conserva su hash y las elimina al caducar. Todas las cuentas tienen por ahora `credits.unlimited=true` y coste cero. Cada consulta queda en `ai_requests` con estado y uso de tokens, dejando preparado el descuento de saldo futuro.
+
+Las predicciones se guardan en `prediction_datasets`. Los identificadores originales de liga, mánager y futbolista se transforman mediante HMAC antes de almacenarse. Cuando un escaneo posterior encuentra el resultado real, el mismo documento se actualiza con ganador, importe y, si la liga Premium los muestra, todas las pujas participantes.
 
 ## Desarrollo y pruebas
 

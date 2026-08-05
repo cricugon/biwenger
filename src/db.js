@@ -26,7 +26,12 @@ async function ensureIndexes(database) {
     database.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true }),
     database.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     database.collection("sessions").createIndex({ userId: 1, createdAt: -1 }),
-    database.collection("ai_requests").createIndex({ userId: 1, createdAt: -1 })
+    database.collection("ai_requests").createIndex({ userId: 1, createdAt: -1 }),
+    database.collection("prediction_datasets").createIndex(
+      { uploaderUserId: 1, leagueHash: 1, snapshotId: 1 }, { unique: true }
+    ),
+    database.collection("prediction_datasets").createIndex({ leagueHash: 1, capturedAt: -1 }),
+    database.collection("prediction_datasets").createIndex({ "players.outcome.resolvedAt": -1 })
   ]);
 }
 
