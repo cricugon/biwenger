@@ -18,14 +18,13 @@ API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas rec
    - `STRIPE_SECRET_KEY`: clave secreta de Stripe (`sk_test_...` durante pruebas o `sk_live_...` en producción).
    - `STRIPE_WEBHOOK_SECRET`: secreto `whsec_...` del endpoint de Stripe.
    - `STRIPE_PRICE_AI_1`, `STRIPE_PRICE_AI_5` y `STRIPE_PRICE_AI_10`: identificadores `price_...` de los tres precios únicos.
-   - `PUBLIC_BASE_URL=https://biwenger.onrender.com`.
    - `OPENAI_MODEL=gpt-5.6-sol`.
    - `OPENAI_REASONING_EFFORT=medium`.
    - Opcionales: `OPENAI_MAX_OUTPUT_TOKENS=1200`, `OPENAI_CONTEXT_MAX_CHARS=240000` y `SESSION_DAYS=90`.
 6. No configures `OPENAI_API_KEY` en Android ni en el cron.
 7. Abre `https://TU-SERVICIO.onrender.com/health`. `features.ai` debe ser `true`.
 
-La URL de este despliegue ya está fijada en `MainActivity.java` como `https://biwenger.onrender.com`.
+La URL de este despliegue ya está fijada en `MainActivity.java` como `https://biwenia.onrender.com`.
 
 ## Configuración de OpenAI
 
@@ -83,7 +82,7 @@ Las predicciones se guardan en `prediction_datasets`. Los identificadores origin
 
 La aplicación pide `POST /api/v1/billing/store-session` con la sesión del usuario y abre la URL temporal recibida. El servidor entrega una cookie HttpOnly, muestra `/store` y nunca confía en un identificador de usuario enviado por el navegador. El pago se crea con Stripe Checkout y el saldo solo se incrementa tras recibir un webhook firmado. Las órdenes se guardan en `billing_orders`; `creditedStripeSessions` en el usuario y la búsqueda atómica impiden acreditar dos veces el mismo `checkout.session` aunque Stripe reintente el evento.
 
-El endpoint de Stripe debe ser `https://biwenger.onrender.com/stripe/webhook` con los eventos `checkout.session.completed` y `checkout.session.async_payment_succeeded`. En local se puede comprobar el catálogo Live sin crear pagos con:
+El endpoint de Stripe debe ser `https://biwenia.onrender.com/stripe/webhook` con los eventos `checkout.session.completed` y `checkout.session.async_payment_succeeded`. En local se puede comprobar el catálogo Live sin crear pagos con:
 
 ```bash
 npm run verify:stripe

@@ -16,7 +16,7 @@ export const config = Object.freeze({
   adminPassword: process.env.ADMIN_PASSWORD || "",
   adminSessionSecret: process.env.ADMIN_SESSION_SECRET || process.env.DATASET_HASH_SALT || process.env.OPENAI_SAFETY_SALT || "",
   adminSessionHours: Math.min(168, Math.max(1, Number.parseInt(process.env.ADMIN_SESSION_HOURS || "12", 10))),
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL || "https://biwenger.onrender.com").replace(/\/+$/, ""),
+  publicBaseUrl: "https://biwenia.onrender.com",
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
   stripePriceAi1: process.env.STRIPE_PRICE_AI_1 || "price_1U5ryjL6o7qmQamsEcFG1KK4",
