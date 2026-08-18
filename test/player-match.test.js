@@ -44,3 +44,11 @@ test("rechaza equipos distintos y apellidos ambiguos", () => {
     { name: "Diego Javier Llorente", team: "Betis", sourceIds: { futbolFantasy: "707" } }
   ), -1);
 });
+
+test("normaliza Vini Jr. como Vinicius Junior", () => {
+  const score = playerMatchScore(
+    { name: "Vini Jr.", team: "Real Madrid", position: "DL" },
+    { name: "Vinicius Junior", team: "Real Madrid", position: "Delantero", sourceIds: { futbolFantasy: "5565" } }
+  );
+  assert.ok(score >= 1_500);
+});

@@ -11,11 +11,13 @@ test("valida y limita un lote de predicciones", () => {
       algorithmVersion: "0.9.0",
       players: [{
         key: "jugador-1", position: "DF", price: 1000000, value: 900000,
-        predictions: [{ managerKey: "manager-1", score: .7, probability: 55, estimatedBid: 1100000 }]
+        predictions: [{ managerKey: "manager-1", score: .7, probability: 55, estimatedBid: 1100000,
+          maxBid: null, maxBidUnlimited: true }]
       }]
     }]
   });
   assert.equal(valid.snapshots[0].players[0].predictions[0].probability, 55);
+  assert.equal(valid.snapshots[0].players[0].predictions[0].maxBidUnlimited, true);
 });
 
 test("rechaza lotes sin liga o predicciones", () => {

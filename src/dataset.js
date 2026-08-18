@@ -40,6 +40,7 @@ export function validateDatasetPayload(input = {}) {
             probability: number(prediction.probability, 0, 100),
             estimatedBid: number(prediction.estimatedBid),
             maxBid: number(prediction.maxBid),
+            maxBidUnlimited: Boolean(prediction.maxBidUnlimited),
             confidence: number(prediction.confidence, 0, 1),
             features: (Array.isArray(prediction.features) ? prediction.features : []).slice(0, 8)
               .map(value => number(value, 0, 1))
@@ -79,6 +80,7 @@ export async function storePredictionDataset(userId, input) {
         probability: prediction.probability,
         estimatedBid: prediction.estimatedBid,
         maxBid: prediction.maxBid,
+        maxBidUnlimited: prediction.maxBidUnlimited,
         confidence: prediction.confidence,
         features: prediction.features
       })),

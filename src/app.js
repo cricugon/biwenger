@@ -16,6 +16,18 @@ import {
 import { askBiwengerAi, validateAiInput } from "./ai.js";
 import { storePredictionDataset } from "./dataset.js";
 import { storeDiagnosticDump } from "./diagnostics.js";
+import {
+  STORE_COOKIE,
+  authenticateStoreSession,
+  billingConfigured,
+  constructAndProcessWebhook,
+  cookieValue,
+  createCheckout,
+  createStoreSession,
+  purchaseStatus,
+  storeSummary,
+  verifyStripeCatalog
+} from "./billing.js";
 import { queryValues, reconcilePlayerCatalog, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
 import {
@@ -39,6 +51,12 @@ export function createApp() {
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
+  app.post("/stripe/webhook", express.raw({ type: "application/json", limit: "1mb" }), async (req, res, next) => {
+    try {
+      const result = await constructAndProcessWebhook(req.body, req.get("stripe-signature"));
+      res.json(result);
+    } catch (error) { next(error); }
+  });
   app.use(express.json({ limit: "8mb" }));
 
   const observationRateLimit = rateLimit({ limit: 10, windowMs: 3600000, key: req => req.ip || "unknown" });
@@ -46,6 +64,31 @@ export function createApp() {
   const aiRateLimit = rateLimit({ limit: 30, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
   const datasetRateLimit = rateLimit({ limit: 60, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.ip || "unknown") });
   const adminLoginRateLimit = rateLimit({ limit: 10, windowMs: 15 * 60000, key: req => req.ip || "unknown" });
+  const billingRateLimit = rateLimit({ limit: 20, windowMs: 3600000, key: req => String(req.auth && req.auth.user._id || req.storeAuth && req.storeAuth.user._id || req.ip || "unknown") });
+
+  app.use("/store", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self' https://checkout.stripe.com");
+    next();
+  });
+  app.use("/store/assets", express.static(`${publicDirectory}/store`, { maxAge: "1h", index: false }));
+  app.get("/store/access/:token", async (req, res, next) => {
+    try {
+      const auth = await authenticateStoreSession(req.params.token);
+      if (!auth) return res.redirect(303, "/store?expired=1");
+      res.cookie(STORE_COOKIE, req.params.token, {
+        httpOnly: true,
+        secure: Boolean(req.secure),
+        sameSite: "lax",
+        path: "/",
+        maxAge: 2 * 3600000
+      });
+      res.redirect(303, "/store");
+    } catch (error) { next(error); }
+  });
+  app.get(["/store", "/store/", "/store/success"], (_req, res) => res.sendFile(`${publicDirectory}/store/index.html`));
 
   app.use("/admin/assets", express.static(`${publicDirectory}/admin`, { maxAge: "1h", index: false }));
   app.get(["/admin", "/admin/"], (_req, res) => res.sendFile(`${publicDirectory}/admin/index.html`));
@@ -86,6 +129,9 @@ export function createApp() {
   app.get("/admin/api/diagnostics/:id", requireAdmin, async (req, res, next) => {
     try { res.json(await adminDiagnostic(req.params.id)); } catch (error) { next(error); }
   });
+  app.get("/admin/api/billing/verify", requireAdmin, async (_req, res, next) => {
+    try { res.json({ configured: billingConfigured(), prices: await verifyStripeCatalog() }); } catch (error) { next(error); }
+  });
 
   app.get("/health", async (_req, res, next) => {
     try {
@@ -95,7 +141,7 @@ export function createApp() {
         ok: true,
         service: "biwenger-market-values",
         time: new Date().toISOString(),
-        features: { accounts: true, ai: Boolean(config.openaiApiKey), predictionDataset: true, admin: adminConfigured(), diagnostics: true }
+        features: { accounts: true, ai: Boolean(config.openaiApiKey), predictionDataset: true, admin: adminConfigured(), diagnostics: true, billing: billingConfigured() }
       });
     } catch (error) { next(error); }
   });
@@ -122,6 +168,26 @@ export function createApp() {
       await revokeToken(req.authToken);
       res.json({ ok: true });
     } catch (error) { next(error); }
+  });
+
+  app.post("/api/v1/billing/store-session", requireAuth, billingRateLimit, async (req, res, next) => {
+    try {
+      res.status(201).json(await createStoreSession(req.auth.user._id));
+    } catch (error) { next(error); }
+  });
+
+  app.get("/api/v1/billing/store", requireStoreAuth, async (req, res, next) => {
+    try { res.json(await storeSummary(req.storeToken)); } catch (error) { next(error); }
+  });
+
+  app.post("/api/v1/billing/checkout", requireStoreAuth, billingRateLimit, async (req, res, next) => {
+    try { res.status(201).json(await createCheckout(req.storeToken, req.body && req.body.packKey)); }
+    catch (error) { next(error); }
+  });
+
+  app.get("/api/v1/billing/purchase-status", requireStoreAuth, async (req, res, next) => {
+    try { res.json(await purchaseStatus(req.storeToken, req.query.session_id)); }
+    catch (error) { next(error); }
   });
 
   app.post("/api/v1/ai/ask", requireAuth, aiRateLimit, async (req, res, next) => {
@@ -253,6 +319,17 @@ async function requireAuth(req, res, next) {
     if (!auth) return res.status(401).json({ error: "Sesión caducada o no válida" });
     req.authToken = token;
     req.auth = auth;
+    next();
+  } catch (error) { next(error); }
+}
+
+async function requireStoreAuth(req, res, next) {
+  try {
+    const token = cookieValue(req.get("cookie"));
+    const auth = await authenticateStoreSession(token);
+    if (!auth) return res.status(401).json({ error: "El enlace de compra ha caducado. Vuelve a abrir la tienda desde Biwenia." });
+    req.storeToken = token;
+    req.storeAuth = auth;
     next();
   } catch (error) { next(error); }
 }

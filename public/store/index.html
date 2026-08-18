@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111214">
+  <title>Comprar consultas · Biwenia</title>
+  <link rel="stylesheet" href="/store/assets/store.css?v=1.0.0">
+  <script src="/store/assets/store.js?v=1.0.0" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/store" aria-label="Biwenia">
+      <span class="brand-mark">B</span>
+      <span><strong>Biwenia</strong><small>Consultas IA</small></span>
+    </a>
+    <div id="account-chip" class="account-chip" hidden>
+      <span id="account-name">Usuario</span>
+      <strong id="account-balance">0 consultas</strong>
+    </div>
+  </header>
+
+  <main>
+    <section id="shop-view" class="hero" aria-labelledby="shop-title">
+      <p class="eyebrow">RECARGA TU SALDO</p>
+      <h1 id="shop-title">Más análisis cuando los necesites</h1>
+      <p class="lead">Compra consultas de IA mediante Stripe. Se añadirán automáticamente a tu cuenta de Biwenia.</p>
+      <div id="message" class="message" hidden role="status"></div>
+      <div id="loading" class="loading-card">
+        <span class="spinner" aria-hidden="true"></span>
+        <div><strong>Preparando la tienda</strong><small>Comprobando tu cuenta y los paquetes disponibles…</small></div>
+      </div>
+      <div id="products" class="product-grid" hidden></div>
+    </section>
+
+    <section id="success-view" class="result-card" hidden aria-live="polite">
+      <div id="result-icon" class="result-icon waiting">✓</div>
+      <p class="eyebrow">COMPRA EN STRIPE</p>
+      <h1 id="result-title">Confirmando el pago</h1>
+      <p id="result-text" class="lead">Estamos esperando la confirmación segura de Stripe. Normalmente tarda solo unos segundos.</p>
+      <div id="result-loading" class="inline-loading"><span class="spinner"></span><span>Actualizando tu saldo…</span></div>
+      <div id="result-balance" class="balance-card" hidden><span>Saldo disponible</span><strong>0 consultas</strong></div>
+      <button id="retry-status" class="button secondary" type="button" hidden>Comprobar de nuevo</button>
+      <p class="return-note">Cuando termines, vuelve a la aplicación. El saldo se actualizará al abrir Preguntar IA.</p>
+    </section>
+
+    <section class="trust-card">
+      <div><span class="trust-icon">↗</span><p><strong>Pago seguro con Stripe</strong><small>Biwenia no recibe ni almacena los datos de tu tarjeta.</small></p></div>
+      <div><span class="trust-icon">＋</span><p><strong>Saldo automático</strong><small>Las consultas se asignan a la cuenta con la que abriste esta tienda.</small></p></div>
+      <div><span class="trust-icon">∞</span><p><strong>Sin caducidad</strong><small>Las consultas compradas permanecen en tu cuenta hasta que las utilices.</small></p></div>
+    </section>
+  </main>
+
+  <footer>Biwenia · Servicio independiente de análisis fantasy</footer>
+</body>
+</html>

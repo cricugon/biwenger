@@ -17,6 +17,22 @@ function sameTokenSet(left, right) {
   return leftInsideRight || rightInsideLeft;
 }
 
+function playerTokens(value) {
+  return normalizeName(value).split(" ").filter(Boolean).map(token => {
+    if (token === "vini") return "vinicius";
+    if (token === "jr" || token === "jra") return "junior";
+    return token;
+  });
+}
+
+function samePlayerTokenSet(left, right) {
+  const leftTokens = new Set(playerTokens(left));
+  const rightTokens = new Set(playerTokens(right));
+  if (!leftTokens.size || !rightTokens.size) return false;
+  return [...leftTokens].every(token => rightTokens.has(token)) ||
+    [...rightTokens].every(token => leftTokens.has(token));
+}
+
 export function normalizePosition(value) {
   const position = normalizeName(value);
   if (!position) return "";
@@ -30,6 +46,8 @@ export function normalizePosition(value) {
 export function playerMatchScore(requested, candidate) {
   const requestedName = normalizeName(requested && requested.name);
   const candidateName = normalizeName(candidate && candidate.name);
+  const requestedPlayerName = playerTokens(requested && requested.name).join(" ");
+  const candidatePlayerName = playerTokens(candidate && candidate.name).join(" ");
   if (!requestedName || !candidateName) return -1;
 
   const requestedId = String(requested && requested.id || "").trim();
@@ -47,14 +65,14 @@ export function playerMatchScore(requested, candidate) {
   const positionMatches = requestedPosition && candidatePosition && requestedPosition === candidatePosition;
   if (requestedPosition && candidatePosition && !positionMatches) return -1;
 
-  if (requestedName === candidateName) {
+  if (requestedPlayerName === candidatePlayerName) {
     return 1_500 + (teamMatches ? 100 : 0) + (positionMatches ? 40 : 0) + (sourceIds.futbolFantasy ? 200 : 0);
   }
-  const tokenSetMatches = sameTokenSet(requestedName, candidateName);
+  const tokenSetMatches = samePlayerTokenSet(requestedName, candidateName);
   if (!tokenSetMatches) {
     if (!teamMatches || !positionMatches) return -1;
-    const requestedTokens = requestedName.split(" ").filter(token => token.length >= 3);
-    const candidateTokens = candidateName.split(" ").filter(token => token.length >= 3);
+    const requestedTokens = playerTokens(requestedName).filter(token => token.length >= 3);
+    const candidateTokens = playerTokens(candidateName).filter(token => token.length >= 3);
     const overlap = requestedTokens.filter(token => candidateTokens.includes(token)).length;
     const prefixOverlap = requestedTokens.some(left => candidateTokens.some(right =>
       Math.min(left.length, right.length) >= 4 && (left.startsWith(right) || right.startsWith(left))

@@ -1,6 +1,6 @@
 {
   "name": "biwenger-market-values-api",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "Histórico permanente de valores de mercado para Biwenger Saldo",
@@ -11,6 +11,7 @@
     "start": "node src/app.js",
     "import:daily": "node src/jobs/import-fantasy.js",
     "import:history": "node src/jobs/import-history.js",
+    "verify:stripe": "node scripts/verify-stripe.js",
     "test": "node --test"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "dotenv": "16.6.1",
     "express": "5.2.1",
     "mongodb": "7.5.0",
-    "openai": "7.4.0"
+    "openai": "7.4.0",
+    "stripe": "22.1.1"
   }
 }

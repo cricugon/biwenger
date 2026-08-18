@@ -15,6 +15,10 @@ API Node.js + MongoDB que conserva los valores diarios, gestiona las cuentas rec
    - `ADMIN_USERNAME=admin`.
    - `ADMIN_PASSWORD`: contraseña administrativa de al menos 12 caracteres.
    - `ADMIN_SESSION_SECRET`: tercer valor aleatorio secreto de al menos 24 caracteres.
+   - `STRIPE_SECRET_KEY`: clave secreta de Stripe (`sk_test_...` durante pruebas o `sk_live_...` en producción).
+   - `STRIPE_WEBHOOK_SECRET`: secreto `whsec_...` del endpoint de Stripe.
+   - `STRIPE_PRICE_AI_1`, `STRIPE_PRICE_AI_5` y `STRIPE_PRICE_AI_10`: identificadores `price_...` de los tres precios únicos.
+   - `PUBLIC_BASE_URL=https://biwenger.onrender.com`.
    - `OPENAI_MODEL=gpt-5.6-sol`.
    - `OPENAI_REASONING_EFFORT=medium`.
    - Opcionales: `OPENAI_MAX_OUTPUT_TOKENS=1200`, `OPENAI_CONTEXT_MAX_CHARS=240000` y `SESSION_DAYS=90`.
@@ -65,10 +69,25 @@ La tarea es secuencial y reanudable. `-- --force` permite repetir fichas y `DETA
 - `POST /api/v1/diagnostics/sync`: sustituye el último diagnóstico de esa cuenta y liga, con sesión.
 - `POST /api/v1/values/query`: `{ "players": ["Nombre"], "days": 60 }`.
 - `POST /api/v1/observations/biwenger`: guarda el contraste diario leído por la app.
+- `POST /api/v1/billing/store-session`: crea un enlace temporal de tienda para el usuario autenticado.
+- `GET /api/v1/billing/store`: devuelve el saldo y los paquetes de la tienda usando la cookie temporal.
+- `POST /api/v1/billing/checkout`: crea una sesión de Stripe Checkout para `ai_1`, `ai_5` o `ai_10`.
+- `GET /api/v1/billing/purchase-status`: consulta el estado de una compra desde la tienda.
+- `POST /stripe/webhook`: recibe y verifica las confirmaciones de Stripe.
 
 Las contraseñas se derivan con `scrypt` y sal individual. Las sesiones son tokens opacos; Mongo solo conserva su hash y las elimina al caducar. Las cuentas empiezan con saldo 0, cada consulta IA reserva un crédito y lo devuelve automáticamente si OpenAI falla. Cada consulta queda en `ai_requests` con estado y uso de tokens.
 
 Las predicciones se guardan en `prediction_datasets`. Los identificadores originales de liga, mánager y futbolista se transforman mediante HMAC antes de almacenarse. Cuando un escaneo posterior encuentra el resultado real, el mismo documento se actualiza con ganador, importe y, si la liga Premium los muestra, todas las pujas participantes.
+
+## Tienda de consultas IA
+
+La aplicación pide `POST /api/v1/billing/store-session` con la sesión del usuario y abre la URL temporal recibida. El servidor entrega una cookie HttpOnly, muestra `/store` y nunca confía en un identificador de usuario enviado por el navegador. El pago se crea con Stripe Checkout y el saldo solo se incrementa tras recibir un webhook firmado. Las órdenes se guardan en `billing_orders`; `creditedStripeSessions` en el usuario y la búsqueda atómica impiden acreditar dos veces el mismo `checkout.session` aunque Stripe reintente el evento.
+
+El endpoint de Stripe debe ser `https://biwenger.onrender.com/stripe/webhook` con los eventos `checkout.session.completed` y `checkout.session.async_payment_succeeded`. En local se puede comprobar el catálogo Live sin crear pagos con:
+
+```bash
+npm run verify:stripe
+```
 
 ## Panel de administración
 
