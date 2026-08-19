@@ -291,7 +291,87 @@ export async function storeBiwengerObservations(payload) {
     ]);
     corrected += 1;
   }
+  if (operations.length >= 50) {
+    await database.collection("biwenger_catalog_scans").updateOne(
+      { _id: payload.observedDate },
+      {
+        $set: {
+          status: "completed",
+          clientId: payload.clientId,
+          players: operations.length,
+          completedAt: now,
+          updatedAt: now
+        },
+        $unset: { expiresAt: "" },
+        $setOnInsert: { createdAt: now }
+      },
+      { upsert: true }
+    );
+  }
   return { accepted: operations.length, corrected, players: affected.size };
+}
+
+export async function claimBiwengerCatalogScan(observedDate, clientId) {
+  const database = await db();
+  const now = new Date();
+  const existingValues = await database.collection("market_values").countDocuments(
+    { date: observedDate, source: "biwenger" },
+    { limit: 50 }
+  );
+  if (existingValues >= 50) {
+    await database.collection("biwenger_catalog_scans").updateOne(
+      { _id: observedDate },
+      {
+        $set: { status: "completed", players: existingValues, completedAt: now, updatedAt: now },
+        $unset: { expiresAt: "" },
+        $setOnInsert: { createdAt: now }
+      },
+      { upsert: true }
+    );
+    return { scanRequired: false, status: "completed", players: existingValues };
+  }
+
+  const collection = database.collection("biwenger_catalog_scans");
+  const existing = await collection.findOne({ _id: observedDate });
+  if (existing && existing.status === "completed") {
+    return { scanRequired: false, status: "completed", players: Number(existing.players) || 0 };
+  }
+  if (existing && existing.expiresAt && new Date(existing.expiresAt).getTime() > now.getTime()) {
+    return { scanRequired: false, status: "claimed", leaseExpiresAt: existing.expiresAt };
+  }
+
+  const expiresAt = new Date(now.getTime() + 15 * 60_000);
+  if (!existing) {
+    try {
+      await collection.insertOne({
+        _id: observedDate,
+        status: "claimed",
+        clientId,
+        claimedAt: now,
+        expiresAt,
+        createdAt: now,
+        updatedAt: now
+      });
+      return { scanRequired: true, status: "claimed", leaseExpiresAt: expiresAt };
+    } catch (error) {
+      if (Number(error && error.code) !== 11000) throw error;
+    }
+  }
+
+  const claimed = await collection.updateOne(
+    { _id: observedDate, status: { $ne: "completed" }, expiresAt: { $lte: now } },
+    { $set: { status: "claimed", clientId, claimedAt: now, expiresAt, updatedAt: now } }
+  );
+  if (claimed.modifiedCount === 1) {
+    return { scanRequired: true, status: "claimed", leaseExpiresAt: expiresAt };
+  }
+  const current = await collection.findOne({ _id: observedDate });
+  return {
+    scanRequired: false,
+    status: current && current.status || "claimed",
+    leaseExpiresAt: current && current.expiresAt || null,
+    players: Number(current && current.players) || 0
+  };
 }
 
 export async function queryValues(requestedPlayers, days) {

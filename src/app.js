@@ -28,7 +28,7 @@ import {
   storeSummary,
   verifyStripeCatalog
 } from "./billing.js";
-import { queryValues, reconcilePlayerCatalog, storeBiwengerObservations } from "./repository.js";
+import { claimBiwengerCatalogScan, queryValues, reconcilePlayerCatalog, storeBiwengerObservations } from "./repository.js";
 import { madridParts, normalizeName } from "./utils.js";
 import {
   adminConfigured,
@@ -298,6 +298,21 @@ export function createApp() {
         players
       });
       res.status(201).json({ ok: true, ...result });
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/v1/observations/biwenger/claim", observationRateLimit, async (req, res, next) => {
+    try {
+      const body = req.body || {};
+      const madrid = madridParts();
+      if (madrid.hour < 7 || body.observedDate !== madrid.date) {
+        return res.json({ ok: true, scanRequired: false, status: "before-update" });
+      }
+      const clientId = String(body.clientId || "");
+      if (!/^[a-f0-9-]{20,64}$/i.test(clientId)) {
+        return res.status(400).json({ error: "Identificador de cliente inválido" });
+      }
+      res.json({ ok: true, ...(await claimBiwengerCatalogScan(body.observedDate, clientId)) });
     } catch (error) { next(error); }
   });
 

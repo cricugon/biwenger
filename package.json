@@ -1,6 +1,6 @@
 {
   "name": "biwenger-market-values-api",
-  "version": "1.5.3",
+  "version": "1.5.5",
   "private": true,
   "type": "module",
   "description": "Histórico permanente de valores de mercado para Biwenger Saldo",

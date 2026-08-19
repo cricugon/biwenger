@@ -29,6 +29,16 @@ export function validateDatasetPayload(input = {}) {
         id,
         capturedAt: text(snapshot.capturedAt, 40),
         algorithmVersion: text(snapshot.algorithmVersion, 30),
+        roundTiming: snapshot.roundTiming ? {
+          phase: text(snapshot.roundTiming.phase, 30),
+          activeRound: text(snapshot.roundTiming.activeRound, 80),
+          nextRound: text(snapshot.roundTiming.nextRound, 80),
+          nextStartAt: text(snapshot.roundTiming.nextStartAt, 40),
+          hoursToNext: snapshot.roundTiming.hoursToNext == null ? null : number(snapshot.roundTiming.hoursToNext, 0, 10_000),
+          deadlinePressure: number(snapshot.roundTiming.deadlinePressure, 0, 1),
+          openMarket: number(snapshot.roundTiming.openMarket, 0, 1),
+          roundsKnown: Math.round(number(snapshot.roundTiming.roundsKnown, 0, 10))
+        } : null,
         players: (Array.isArray(snapshot.players) ? snapshot.players : []).slice(0, 80).map(player => ({
           key: text(player.key, 220),
           position: ["PT", "DF", "MC", "DL", "?"].includes(player.position) ? player.position : "?",
@@ -43,7 +53,7 @@ export function validateDatasetPayload(input = {}) {
             maxBid: number(prediction.maxBid),
             maxBidUnlimited: Boolean(prediction.maxBidUnlimited),
             confidence: number(prediction.confidence, 0, 1),
-            features: (Array.isArray(prediction.features) ? prediction.features : []).slice(0, 8)
+            features: (Array.isArray(prediction.features) ? prediction.features : []).slice(0, 10)
               .map(value => number(value, 0, 1))
           })).filter(prediction => prediction.managerKey),
           outcome: player.outcome ? {
@@ -104,6 +114,7 @@ export async function storePredictionDataset(userId, input) {
         $set: {
           capturedAt: snapshot.capturedAt,
           algorithmVersion: snapshot.algorithmVersion,
+          roundTiming: snapshot.roundTiming,
           players,
           updatedAt: now
         },
