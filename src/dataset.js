@@ -34,6 +34,7 @@ export function validateDatasetPayload(input = {}) {
           position: ["PT", "DF", "MC", "DL", "?"].includes(player.position) ? player.position : "?",
           price: number(player.price),
           value: number(player.value),
+          listedPreviously: Boolean(player.listedPreviously),
           predictions: (Array.isArray(player.predictions) ? player.predictions : []).slice(0, 60).map(prediction => ({
             managerKey: text(prediction.managerKey, 220),
             score: number(prediction.score, 0, 1),
@@ -74,6 +75,7 @@ export async function storePredictionDataset(userId, input) {
       position: player.position,
       price: player.price,
       value: player.value,
+      listedPreviously: player.listedPreviously,
       predictions: player.predictions.map(prediction => ({
         managerHash: hash(`manager:${leagueHash}:${prediction.managerKey}`),
         score: prediction.score,
